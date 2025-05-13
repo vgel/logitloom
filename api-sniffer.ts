@@ -1,5 +1,5 @@
 export interface ApiInfo {
-  provider: "openai" | "anthropic" | "deepseek" | "openrouter" | "hyperbolic" | "vllm" | "kobold-cpp" | "unknown";
+  provider: "openai" | "anthropic" | "deepseek" | "openrouter" | "hyperbolic" | "vllm" | "kobold-cpp" | "chutes" | "unknown";
   supportsLogprobs: "yes" | "no" | "unknown";
   supportsPrefill: "yes" | "no" | "unknown";
   prefillStyle?: { kind: "trailing" } | { kind: "flags"; flags: Record<string, any>; target: "body" | "message" };
@@ -37,15 +37,43 @@ export async function sniffApi(baseUrl: string, apiKey: string): Promise<ApiInfo
 }
 
 async function _sniffApi(baseUrl: string, apiKey: string): Promise<ApiInfo> {
-  // we could just check baseUrl here, but it might be proxied.
-  const response = await fetch(`${baseUrl}/models`, {
-    headers: {
+  let response;
+  let lastError: any;
+
+  // try different headers in case of CORS issues
+  const headerConfigs = [
+    {
       Authorization: `Bearer ${apiKey}`,
       "x-api-key": apiKey,
       "anthropic-dangerous-direct-browser-access": "true",
     },
-    redirect: "follow",
-  });
+    {
+      Authorization: `Bearer ${apiKey}`,
+      "x-api-key": apiKey,
+    },
+    {
+      Authorization: `Bearer ${apiKey}`,
+    },
+  ];
+
+  for (const headers of headerConfigs) {
+    try {
+      response = await fetch(`${baseUrl}/models`, {
+        headers,
+        redirect: "follow",
+      });
+      break; // Success, exit loop
+    } catch (e) {
+      console.log(`try again with different header`);
+      lastError = e;
+      continue; // Try next header config
+    }
+  }
+
+  if (!response) {
+    throw lastError; // Propagate the last fetch error to sniffApi
+  }
+
   console.log(`/models response for ${baseUrl}:`, response);
 
   if (response.status === 200) {
@@ -59,7 +87,14 @@ async function _sniffApi(baseUrl: string, apiKey: string): Promise<ApiInfo> {
 
     const models = (json.data ?? []).map((m: any) => m.id);
     const owners = (json.data ?? []).map((m: any) => m.owned_by);
-    if (owners.includes("koboldcpp")) {
+    if (models.some((m: string) => m.startsWith("chutesai/"))) {
+      return {
+        provider: "chutes",
+        supportsLogprobs: "unknown", // yes for some models, not for others?
+        supportsPrefill: "unknown",  // same
+        prefillStyle: { kind: "trailing" },
+      };
+    } else if (owners.includes("koboldcpp")) {
       return {
         provider: "kobold-cpp",
         supportsLogprobs: "yes",
@@ -99,6 +134,7 @@ async function _sniffApi(baseUrl: string, apiKey: string): Promise<ApiInfo> {
         provider: "openai",
         supportsLogprobs: "yes",
         supportsPrefill: "no",
+        extraWarning: "Long live gpt-3.5-turbo! 🤖"
       };
     } else if (models.includes("deepseek-chat")) {
       return {
@@ -112,6 +148,7 @@ async function _sniffApi(baseUrl: string, apiKey: string): Promise<ApiInfo> {
     }
   } else {
     const error = await response.text();
+
     if (error.includes("anthropic-version")) {
       return {
         provider: "anthropic",
