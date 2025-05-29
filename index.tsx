@@ -26,6 +26,8 @@ interface ApiPreset {
 }
 
 function App(): JSX.Element {
+  const [darkMode, setDarkMode] = useLocalStorageState<boolean>("darkMode", { defaultValue: false });
+
   const [baseUrl, setBaseUrl] = useLocalStorageState<string>("baseUrl");
   const [apiKey, setApiKey] = useLocalStorageState<string>("apiKey");
   const [modelName, setModelName] = useLocalStorageState<string>("modelName");
@@ -58,6 +60,7 @@ function App(): JSX.Element {
         {store.value.kind === "error" && !store.running && <div className="error">{store.value.error.toString()}</div>}
       </div>
       <Settings>
+        <DarkModeToggle darkMode={darkMode} setDarkMode={setDarkMode} />
         <TextSetting label="Base URL" type="text" value={baseUrl} onChange={setBaseUrl} />{" "}
         <TextSetting label="API Key" type="password" value={apiKey} onChange={setApiKey} />{" "}
         <TextSetting label="Model" type="text" value={modelName} onChange={setModelName} />{" "}
@@ -348,6 +351,31 @@ const TreeNode = React.memo(function TreeNode({
 });
 
 // Settings components
+
+function DarkModeToggle(props: { darkMode: boolean; setDarkMode: (darkMode: boolean) => void }): JSX.Element {
+  useEffect(() => {
+    if (props.darkMode && !document.body.classList.contains("dark-mode")) {
+      document.body.classList.add("dark-mode");
+    }
+  }, []);
+
+  return (
+    <button
+      title="Toggle dark mode"
+      onClick={() => {
+        if (props.darkMode) {
+          document.body.classList.remove("dark-mode");
+          props.setDarkMode(false);
+        } else {
+          document.body.classList.add("dark-mode");
+          props.setDarkMode(true);
+        }
+      }}
+    >
+      {props.darkMode ? "☀️" : "🌙"}
+    </button>
+  );
+}
 
 function Settings(props: { children?: React.ReactNode | undefined }): JSX.Element {
   return <div className="settings-container">{props.children}</div>;
