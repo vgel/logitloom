@@ -1,5 +1,15 @@
 export interface ApiInfo {
-  provider: "openai" | "anthropic" | "deepseek" | "openrouter" | "hyperbolic" | "vllm" | "kobold-cpp" | "unknown";
+  provider:
+    | "openai"
+    | "anthropic"
+    | "deepseek"
+    | "openrouter"
+    | "hyperbolic"
+    | "vllm"
+    | "kobold-cpp"
+    | "llama-server"
+    | "nous"
+    | "unknown";
   supportsLogprobs: "yes" | "no" | "unknown";
   supportsPrefill: "yes" | "no" | "unknown";
   prefillStyle?: { kind: "trailing" } | { kind: "flags"; flags: Record<string, any>; target: "body" | "message" };
@@ -65,7 +75,13 @@ async function _sniffApi(baseUrl: string, apiKey: string): Promise<ApiInfo> {
         supportsLogprobs: "yes",
         supportsPrefill: "unknown",
         prefillStyle: { kind: "trailing" },
-        extraWarning: "Prefill support was merged into KoboldCpp recently, make sure you're on the latest version.", // EVEN ON THE LATEST VERSION IT DOESNT FUCKING WORK THOUGH
+      };
+    } else if (owners.includes("llamacpp")) {
+      return {
+        provider: "llama-server",
+        supportsLogprobs: "yes",
+        supportsPrefill: "yes",
+        prefillStyle: { kind: "trailing" },
       };
     } else if (owners.includes("vllm")) {
       return {
@@ -108,6 +124,17 @@ async function _sniffApi(baseUrl: string, apiKey: string): Promise<ApiInfo> {
         prefillStyle: { kind: "flags", flags: { prefix: true }, target: "message" },
         needsTemperature: 1.0,
         onlySupportsModels: ["deepseek-chat"],
+      };
+    } else if (models.includes("DeepHermes-3-Mistral-24B-Preview")) {
+      return {
+        provider: "nous",
+        supportsLogprobs: "yes",
+        supportsPrefill: "yes",
+        prefillStyle: {
+          kind: "flags",
+          flags: { continue_final_message: true, add_generation_prompt: false },
+          target: "body",
+        },
       };
     }
   } else {
